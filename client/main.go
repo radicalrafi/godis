@@ -49,14 +49,14 @@ func Deserialize(b []byte) (*Person, error) {
 
 func main() {
 
-	//testValue1 := Person{"Thomas", 5983, 37}
+	testValue1 := Person{"Thomas", 5983, 37}
 	//	testValue2 := Person{"Eliott", 4798, 24}
 	//testValue3 := Person{"Alice", 2346, 28}
 
-	//msgAdd := []byte("ADD")
+	msgAdd := []byte("ADD")
 	msgGet := []byte("GET")
 
-	//serializedTestValue1, _ := Serialize(&testValue1)
+	serializedTestValue1, _ := Serialize(&testValue1)
 	//serializedTestValue2, _ := Serialize(&testValue2)
 	//serializedTestValue3, _ := Serialize(&testValue3)
 
@@ -64,24 +64,24 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	/*
-		packet := append(msgAdd, serializedTestValue1...)
-		fmt.Println(string(packet))
 
-		_, err = conn.Write(packet)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		resp := make([]byte, 64)
-		bufio.NewReader(conn).Read(resp)
-		respout, _ := Deserialize(resp)
-		fmt.Println(string(resp))
-		fmt.Println(respout)
-		conn.Close()
+	packet := append(msgAdd, serializedTestValue1...)
+	fmt.Println(len(packet))
+	fmt.Println("writing packet")
+	n, err2 := conn.Write(packet)
+	fmt.Println(n)
+	fmt.Println("wrote packet")
+	if err2 != nil {
+		fmt.Println(err2)
+		return
+	}
+	fmt.Println("Running")
+	scanner := bufio.NewReader(conn)
+	resp := make([]byte, 10)
+	scanner.Read(resp)
 
-		conn, _ = net.Dial("tcp", "localhost:6666")
-	*/
+	conn.Close()
+	fmt.Println("SENDING GET REQUEST")
 	getpacket := append(msgGet, []byte("Thomas")...)
 
 	conn.Write(getpacket)
@@ -90,7 +90,7 @@ func main() {
 	bufio.NewReader(conn).Read(getresp)
 	degetresp, _ := Deserialize(getresp)
 	fmt.Println(degetresp)
-
+	conn.Close()
 	/*
 		packet2 := append(msgAdd, serializedTestValue2...)
 		conn.Write(packet2)

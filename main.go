@@ -20,17 +20,19 @@ func handleConnection(conn net.Conn, db *DB) {
 	remoteAddr := conn.RemoteAddr().String()
 	fmt.Println("Client connected from " + remoteAddr)
 
-	scanner := bufio.NewScanner(conn)
+	scanner := bufio.NewReader(conn)
 
+	v := make([]byte, 128)
 	for {
 
-		ok := scanner.Scan()
+		_, err := scanner.Read(v)
 
-		if !ok {
+		if err != nil {
 			break
 		}
+		fmt.Println(len(v))
+		handleMessage(db, v, conn)
 
-		go handleMessage(db, scanner.Bytes(), conn)
 	}
 
 	fmt.Println("Client " + remoteAddr + "Disconnected")
@@ -40,22 +42,15 @@ func handleMessage(db *DB, msg []byte, conn net.Conn) {
 	// handle Message takes the message scanned from the connection
 	// and the connection so it can reply back
 
-	// Print the fisrt 4 bytes as a string
-	fmt.Println(">" + string(msg[:3]))
-
-	fmt.Println(len(msg))
 	switch {
 
 	case string(msg[:3]) == "ADD":
-		fmt.Println(">" + string(msg[:2]))
-		fmt.Println(string(msg))
+		fmt.Println(">" + string(msg[:3]))
 		fmt.Println(len(msg))
-		e := addHandler(db, msg)
-		if e != nil {
-			conn.Write([]byte("FAILURE"))
-		}
+		go addHandler(db, msg)
 		response := "SUCCESSFULLY ADDED"
-		conn.Write([]byte(response))
+		fmt.Fprintf(conn, response+"\n")
+		fmt.Println("Done")
 	case string(msg[:3]) == "DEL":
 		fmt.Println(">" + string(msg[:2]))
 		response := "Timestamp" + time.Now().String() + ": Successfully Deleted from store" + "\n"
@@ -73,27 +68,32 @@ func handleMessage(db *DB, msg []byte, conn net.Conn) {
 }
 
 // addHandler handles add messages
-func addHandler(db *DB, msg []byte) error {
+func addHandler(db *DB, msg []byte) {
 	// MSG Format
 	// First 3 bytes are the message
 	// Rest n bytes are the Person struct
+	fmt.Println(len(msg))
 	serialized := msg[3:]
+	//	serialized = append(serialized, msg[len(msg)-1])
+
 	fmt.Println("ADD HANDLER")
 	// deserialize the person to a struct
 	//p := new(Person)
+
 	p, err := Deserialize(serialized)
 	if err != nil {
-		errors.New("failed to read from databse")
+		fmt.Println("FAILED TO DESERIALIZE", err)
+		return
 	}
-
+	fmt.Println("ADDED ", p)
 	db.Put(p.Name, *p)
-	return nil
+	return
 }
 
 // getHandler handles get messages
 func getHandler(db *DB, msg []byte) ([]byte, error) {
 	// skip first 3 bytes expect the next n bytes to be a key
-	key := msg[2:]
+	key := msg[3:]
 
 	p, err := db.Get(string(key))
 
@@ -145,7 +145,7 @@ func Deserialize(b []byte) (*Person, error) {
 // DB is an inmemeory threadsafe golang map
 type DB struct {
 	Lock  sync.RWMutex
-	store map[string]Person
+	Store map[string]Person
 }
 
 // Get returns a value by key
@@ -154,7 +154,7 @@ func (db *DB) Get(key string) (Person, error) {
 	var value Person
 	// lock the mutex for read
 	db.Lock.RLock()
-	value = db.store[key]
+	value = db.Store[key]
 	// unlock the mutex
 	db.Lock.RUnlock()
 	// maps returns zero value for non present keys
@@ -167,12 +167,12 @@ func (db *DB) Get(key string) (Person, error) {
 
 }
 
-// Put stores a new value with a key
+// Put Stores a new value with a key
 func (db *DB) Put(key string, value Person) {
 
 	// Lock the mutex with the write-lock
 	db.Lock.Lock()
-	db.store[key] = value
+	db.Store[key] = value
 	// Unlock the mutex
 	db.Lock.Unlock()
 
@@ -181,7 +181,7 @@ func (db *DB) Put(key string, value Person) {
 // Del deletes a key-value pair
 func (db *DB) Del(key string) {
 	db.Lock.Lock()
-	delete(db.store, key)
+	delete(db.Store, key)
 	db.Lock.Unlock()
 }
 
@@ -223,6 +223,6 @@ func main() {
 
 	fmt.Printf("James was uncerealized to human successfully: %v\n", jamesAsPerson)
 	database := new(DB)
-	database.store = make(map[string]Person, 10)
+	database.Store = make(map[string]Person, 10)
 	TCPServe(database)
 }
